@@ -70,7 +70,7 @@ function spawnObstacle(stage: number, now: number): Obstacle {
 // ─── Collectible spawn ────────────────────────────────────────────────────────
 
 const COLLECTIBLE_TYPES: CollectibleType[] = ['SMALL_HEART', 'BIG_HEART', 'LOVE_LETTER', 'STAR', 'BUTTERFLY', 'EXTRA_LIFE'];
-const COLLECTIBLE_WEIGHTS = [38, 24, 14, 10, 10, 4]; // EXTRA_LIFE is rare (4%)
+const COLLECTIBLE_WEIGHTS = [32, 22, 14, 10, 10, 12]; // EXTRA_LIFE bumped to 12%
 
 function pickCollectibleType(): CollectibleType {
   const total = COLLECTIBLE_WEIGHTS.reduce((a, b) => a + b, 0);
@@ -106,7 +106,7 @@ function spawnCollectParticles(x: number, y: number, type: CollectibleType): Par
   const colors: Record<CollectibleType, string> = {
     SMALL_HEART: '#ff4d6d',
     BIG_HEART: '#c9184a',
-    LOVE_LETTER: '#ffd60a',
+    LOVE_LETTER: '#ff85a1',
     STAR: '#ffd60a',
     BUTTERFLY: '#a8dadc',
     EXTRA_LIFE: '#ff4d6d',
@@ -114,7 +114,7 @@ function spawnCollectParticles(x: number, y: number, type: CollectibleType): Par
   const labels: Record<CollectibleType, string> = {
     SMALL_HEART: '+1',
     BIG_HEART: '+5',
-    LOVE_LETTER: '+10',
+    LOVE_LETTER: '💌 +10',
     STAR: '⭐',
     BUTTERFLY: '🦋',
     EXTRA_LIFE: '+❤️',
@@ -131,6 +131,26 @@ function spawnCollectParticles(x: number, y: number, type: CollectibleType): Par
       life: 1, color, size: rand(3, 7),
     });
   }
+
+  // Love-letter: extra romantic heart shower
+  if (type === 'LOVE_LETTER') {
+    const heartEmojis = ['💕', '💖', '💗', '💓', '💝'];
+    for (let i = 0; i < 10; i++) {
+      particles.push({
+        x: x + rand(-20, 20),
+        y: y + rand(-10, 10),
+        vx: rand(-2.5, 2.5),
+        vy: rand(-3.5, -1.2),
+        life: 1,
+        color: '#ff85a1',
+        size: rand(14, 20),
+        text: heartEmojis[Math.floor(Math.random() * heartEmojis.length)],
+      });
+    }
+    // Big "IN LOVE!" text burst
+    particles.push({ x, y: y - 30, vx: 0, vy: -0.8, life: 1, color: '#ff4d6d', size: 22, text: '💘 In Love!' });
+  }
+
   return particles;
 }
 
@@ -152,6 +172,8 @@ function spawnHitParticles(x: number, y: number): Particle[] {
 
 export const MAX_LIVES = 3;
 
+const IN_LOVE_DURATION = 4; // seconds the in-love effect lasts
+
 export function createInitialState(): GameSnapshot {
   return {
     player: {
@@ -166,6 +188,7 @@ export function createInitialState(): GameSnapshot {
       invincibleTimer: 0,
       lives: MAX_LIVES,
       hitFlashTimer: 0,
+      inLoveTimer: 0,
     },
     obstacles: [],
     collectibles: [],
@@ -252,6 +275,11 @@ export function tick(state: GameSnapshot, input: TickInput): GameSnapshot {
       player.invincible = false;
       player.invincibleTimer = 0;
     }
+  }
+
+  // In-love timer (love letter effect)
+  if (player.inLoveTimer > 0) {
+    player.inLoveTimer = Math.max(0, player.inLoveTimer - dt * 0.001);
   }
 
   // ── Boundary collision ───────────────────────────────────────────────────────
@@ -352,6 +380,9 @@ export function tick(state: GameSnapshot, input: TickInput): GameSnapshot {
       }
       if (moved.type === 'EXTRA_LIFE' && player.lives < MAX_LIVES) {
         player = { ...player, lives: player.lives + 1 };
+      }
+      if (moved.type === 'LOVE_LETTER') {
+        player = { ...player, inLoveTimer: IN_LOVE_DURATION };
       }
       return { ...moved, collected: true };
     }

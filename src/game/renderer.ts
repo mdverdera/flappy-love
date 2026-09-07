@@ -755,7 +755,7 @@ function drawHillCone(
 export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player) {
   if (player.isDead && player.deathTimer > 0.8) return; // already faded
 
-  const { x, y, rotation, wingPhase, isDead, deathTimer, invincible, invincibleTimer, hitFlashTimer } = player;
+  const { x, y, rotation, wingPhase, isDead, deathTimer, invincible, invincibleTimer, hitFlashTimer, inLoveTimer } = player;
   const s = PLAYER_SIZE;
 
   ctx.save();
@@ -791,16 +791,41 @@ export function drawPlayer(ctx: CanvasRenderingContext2D, player: Player) {
     ctx.restore();
   }
 
+  // In-love: pulsing pink aura around the player
+  if (inLoveTimer > 0 && hitFlashTimer <= 0) {
+    const pulse = 1 + Math.sin(inLoveTimer * 6) * 0.18;
+    ctx.save();
+    const auraR = s * 0.95 * pulse;
+    ctx.globalAlpha = Math.min(0.55, inLoveTimer * 0.2);
+    ctx.strokeStyle = '#ff85a1';
+    ctx.lineWidth = 5;
+    ctx.shadowColor = '#ff4d6d';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.arc(0, 0, auraR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
   // Wings
   const wingFlap = Math.sin(wingPhase * 0.12) * 0.6; // -0.6 to +0.6 radians
   drawWing(ctx, -s * 0.7, -s * 0.1, -1, wingFlap, s);
   drawWing(ctx, s * 0.7, -s * 0.1, 1, wingFlap, s);
 
-  // Heart body
+  // Heart body — brighter pink tint while in love
+  if (inLoveTimer > 0) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.3, inLoveTimer * 0.1);
+    ctx.fillStyle = '#ffb3c6';
+    heartPath(ctx, 0, 0, s * 0.52);
+    ctx.fill();
+    ctx.restore();
+  }
   drawHeart(ctx, 0, 0, s);
 
-  // Face
-  drawFace(ctx, 0, s * 0.1, isDead);
+  // Face (passes inLoveTimer so it can draw heart-eyes)
+  drawFace(ctx, 0, s * 0.1, isDead, inLoveTimer);
 
   ctx.globalAlpha = 1;
   ctx.restore();
@@ -866,7 +891,7 @@ function heartPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: num
   ctx.bezierCurveTo(cx + s, cy - s * 0.4, cx + s * 0.05, cy - s * 0.1, cx, cy + s * 0.3);
 }
 
-function drawFace(ctx: CanvasRenderingContext2D, cx: number, cy: number, isDead: boolean) {
+function drawFace(ctx: CanvasRenderingContext2D, cx: number, cy: number, isDead: boolean, inLoveTimer = 0) {
   const s = PLAYER_SIZE * 0.52;
   // Eyes
   if (isDead) {
@@ -884,6 +909,28 @@ function drawFace(ctx: CanvasRenderingContext2D, cx: number, cy: number, isDead:
     // Sad mouth
     ctx.beginPath();
     ctx.arc(cx, cy + s * 0.3, s * 0.25, 0.2, Math.PI - 0.2);
+    ctx.stroke();
+  } else if (inLoveTimer > 0) {
+    // Heart-eyes when in-love
+    ctx.font = `${Math.round(s * 0.7)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const eyeY = cy - s * 0.12;
+    ctx.fillText('❤', cx - s * 0.38, eyeY);
+    ctx.fillText('❤', cx + s * 0.38, eyeY);
+    // Big blushing cheeks
+    ctx.globalAlpha = 0.65;
+    ctx.fillStyle = '#ff4d6d';
+    ctx.beginPath();
+    ctx.ellipse(cx - s * 0.6, cy + s * 0.1, 7, 4.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + s * 0.6, cy + s * 0.1, 7, 4.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // Wide smile (more curved)
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy + s * 0.18, s * 0.3, 0.15, Math.PI - 0.15);
     ctx.stroke();
   } else {
     // Cute dot eyes

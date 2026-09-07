@@ -26,6 +26,7 @@ export interface Player {
   invincibleTimer: number;
   lives: number;      // remaining lives (starts at 3)
   hitFlashTimer: number; // >0 while showing hit-flash (not full death)
+  inLoveTimer: number;   // >0 after collecting a love letter (seconds)
 }
 
 export type ObstacleType =
