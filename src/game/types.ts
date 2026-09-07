@@ -55,7 +55,7 @@ export interface Obstacle {
   spawnTime: number; // timestamp when spawned (for oscillation)
 }
 
-export type CollectibleType = 'SMALL_HEART' | 'BIG_HEART' | 'LOVE_LETTER' | 'STAR' | 'BUTTERFLY';
+export type CollectibleType = 'SMALL_HEART' | 'BIG_HEART' | 'LOVE_LETTER' | 'STAR' | 'BUTTERFLY' | 'EXTRA_LIFE';
 
 export interface Collectible {
   id: number;

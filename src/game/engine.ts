@@ -69,8 +69,8 @@ function spawnObstacle(stage: number, now: number): Obstacle {
 
 // ─── Collectible spawn ────────────────────────────────────────────────────────
 
-const COLLECTIBLE_TYPES: CollectibleType[] = ['SMALL_HEART', 'BIG_HEART', 'LOVE_LETTER', 'STAR', 'BUTTERFLY'];
-const COLLECTIBLE_WEIGHTS = [40, 25, 15, 10, 10];
+const COLLECTIBLE_TYPES: CollectibleType[] = ['SMALL_HEART', 'BIG_HEART', 'LOVE_LETTER', 'STAR', 'BUTTERFLY', 'EXTRA_LIFE'];
+const COLLECTIBLE_WEIGHTS = [38, 24, 14, 10, 10, 4]; // EXTRA_LIFE is rare (4%)
 
 function pickCollectibleType(): CollectibleType {
   const total = COLLECTIBLE_WEIGHTS.reduce((a, b) => a + b, 0);
@@ -109,6 +109,7 @@ function spawnCollectParticles(x: number, y: number, type: CollectibleType): Par
     LOVE_LETTER: '#ffd60a',
     STAR: '#ffd60a',
     BUTTERFLY: '#a8dadc',
+    EXTRA_LIFE: '#ff4d6d',
   };
   const labels: Record<CollectibleType, string> = {
     SMALL_HEART: '+1',
@@ -116,6 +117,7 @@ function spawnCollectParticles(x: number, y: number, type: CollectibleType): Par
     LOVE_LETTER: '+10',
     STAR: '⭐',
     BUTTERFLY: '🦋',
+    EXTRA_LIFE: '+❤️',
   };
   const color = colors[type];
   const particles: Particle[] = [];
@@ -332,7 +334,7 @@ export function tick(state: GameSnapshot, input: TickInput): GameSnapshot {
 
   // ── Collectibles ──────────────────────────────────────────────────────────────
   const LOVE_VALUES: Record<CollectibleType, number> = {
-    SMALL_HEART: 1, BIG_HEART: 5, LOVE_LETTER: 10, STAR: 0, BUTTERFLY: 0,
+    SMALL_HEART: 1, BIG_HEART: 5, LOVE_LETTER: 10, STAR: 0, BUTTERFLY: 0, EXTRA_LIFE: 0,
   };
   let newLove = lovePoints;
 
@@ -347,6 +349,9 @@ export function tick(state: GameSnapshot, input: TickInput): GameSnapshot {
       newLove += LOVE_VALUES[moved.type];
       if (moved.type === 'STAR') {
         player = { ...player, invincible: true, invincibleTimer: 5 };
+      }
+      if (moved.type === 'EXTRA_LIFE' && player.lives < MAX_LIVES) {
+        player = { ...player, lives: player.lives + 1 };
       }
       return { ...moved, collected: true };
     }

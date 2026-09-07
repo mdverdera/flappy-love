@@ -308,15 +308,55 @@ function drawSchool(ctx: CanvasRenderingContext2D, x: number, groundY: number) {
   ctx.moveTo(bx + w + 6, by - 12);
   ctx.lineTo(bx + w + 6, groundY);
   ctx.stroke();
-  // Flag
-  ctx.fillStyle = '#1565c0';
+  // Philippine flag
+  const fx = bx + w + 7; // hoist x
+  const fy = by - 14;    // top of flag
+  const fw = 22;         // flag width
+  const fh = 12;         // flag height
+
+  ctx.save();
+  // Clip to flag rectangle
   ctx.beginPath();
-  ctx.rect(bx + w + 7, by - 12, 12, 5);
-  ctx.fill();
-  ctx.fillStyle = '#c62828';
+  ctx.rect(fx, fy, fw, fh);
+  ctx.clip();
+
+  // Blue stripe (top half)
+  ctx.fillStyle = '#0038A8';
+  ctx.fillRect(fx, fy, fw, fh / 2);
+
+  // Red stripe (bottom half)
+  ctx.fillStyle = '#CE1126';
+  ctx.fillRect(fx, fy + fh / 2, fw, fh / 2);
+
+  // White equilateral-ish triangle on hoist side
+  ctx.fillStyle = '#FFFFFF';
   ctx.beginPath();
-  ctx.rect(bx + w + 7, by - 7, 12, 5);
+  ctx.moveTo(fx, fy);
+  ctx.lineTo(fx, fy + fh);
+  ctx.lineTo(fx + fh * 0.87, fy + fh / 2); // apex ~ height * √3/2
+  ctx.closePath();
   ctx.fill();
+
+  // Sun with 8 rays in the centre of the triangle
+  const sunX = fx + (fh * 0.87) / 3;
+  const sunY = fy + fh / 2;
+  const sunR = 2.2;
+  const rayLen = 3.5;
+  ctx.strokeStyle = '#FCD116';
+  ctx.lineWidth = 0.7;
+  for (let i = 0; i < 8; i++) {
+    const angle = (i * Math.PI) / 4 - Math.PI / 2;
+    ctx.beginPath();
+    ctx.moveTo(sunX + Math.cos(angle) * sunR, sunY + Math.sin(angle) * sunR);
+    ctx.lineTo(sunX + Math.cos(angle) * rayLen, sunY + Math.sin(angle) * rayLen);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#FCD116';
+  ctx.beginPath();
+  ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
 
   drawLandmarkLabel(ctx, x, groundY - h - 14, '🏫');
 }
@@ -950,6 +990,7 @@ export function drawCollectible(ctx: CanvasRenderingContext2D, item: Collectible
     case 'LOVE_LETTER': drawLoveLetter(ctx); break;
     case 'STAR': drawStarCollectible(ctx, time); break;
     case 'BUTTERFLY': drawButterfly(ctx, time); break;
+    case 'EXTRA_LIFE': drawExtraLife(ctx, time); break;
   }
 
   ctx.restore();
@@ -976,6 +1017,42 @@ function drawBigHeart(ctx: CanvasRenderingContext2D) {
   ctx.beginPath();
   ctx.ellipse(-5, -13, 5, 3, -0.3, 0, Math.PI * 2);
   ctx.fill();
+}
+
+function drawExtraLife(ctx: CanvasRenderingContext2D, time: number) {
+  // Pulsing golden-outlined heart with a "+" symbol — clearly a life restore
+  const pulse = 1 + Math.sin(time * 0.005) * 0.12;
+  ctx.save();
+  ctx.scale(pulse, pulse);
+
+  // Outer golden glow ring
+  ctx.strokeStyle = '#ffd60a';
+  ctx.lineWidth = 2.5;
+  heartPath(ctx, 0, -12, 16);
+  ctx.stroke();
+
+  // Filled heart (deep red)
+  const grad = ctx.createRadialGradient(-4, -14, 2, 0, -10, 18);
+  grad.addColorStop(0, '#ff6b8a');
+  grad.addColorStop(1, '#c9184a');
+  ctx.fillStyle = grad;
+  heartPath(ctx, 0, -12, 16);
+  ctx.fill();
+
+  // Shine
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.beginPath();
+  ctx.ellipse(-5, -15, 5, 3, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // "+" symbol in the centre of the heart
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('+', 0, -9);
+
+  ctx.restore();
 }
 
 function drawLoveLetter(ctx: CanvasRenderingContext2D) {
