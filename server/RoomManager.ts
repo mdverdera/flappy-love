@@ -1,7 +1,7 @@
 // ─── RoomManager ──────────────────────────────────────────────────────────────
 // In-memory room + player management. No database — rooms are ephemeral.
 
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import type { Room, ServerPlayer, PlayerInfo, RoundResult, PlayerColor } from './types';
 import { PLAYER_COLORS } from './types';
 
@@ -314,7 +314,7 @@ export function startGame(playerId: string) {
       clearInterval(interval);
 
       // Generate round
-      const roundId = uuidv4();
+      const roundId = randomUUID();
       const seed = Math.floor(Math.random() * 2_147_483_647);
       const startTime = Date.now() + 200; // 200ms buffer for message delivery
 
