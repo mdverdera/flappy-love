@@ -67,12 +67,10 @@ export default function GameCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
-    if (canvas.width !== CANVAS_WIDTH * dpr || canvas.height !== CANVAS_HEIGHT * dpr) {
-      canvas.width = CANVAS_WIDTH * dpr;
-      canvas.height = CANVAS_HEIGHT * dpr;
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.scale(dpr, dpr);
-    }
+    canvas.width = CANVAS_WIDTH * dpr;
+    canvas.height = CANVAS_HEIGHT * dpr;
+    const ctx = canvas.getContext('2d');
+    if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }, []);
 
   const [screen, setScreen] = useState<'MENU' | 'COUNTDOWN' | 'PLAYING' | 'GAME_OVER'>(multiplayerMode ? 'PLAYING' : 'MENU');
@@ -107,8 +105,8 @@ export default function GameCanvas({
           if (canvas.width !== CANVAS_WIDTH * dpr || canvas.height !== CANVAS_HEIGHT * dpr) {
             canvas.width = CANVAS_WIDTH * dpr;
             canvas.height = CANVAS_HEIGHT * dpr;
-            ctx.scale(dpr, dpr);
           }
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
           ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
           drawBackground(ctx, 0, 0, now);
           drawCountdown(ctx, remaining);
@@ -139,13 +137,14 @@ export default function GameCanvas({
       const ctx = canvas.getContext('2d');
       if (!ctx) { rafRef.current = requestAnimationFrame(loop); return; }
 
-      // Scale canvas to fill container
+      // Resize canvas if DPR or dimensions changed (e.g. orientation change).
+      // Always use setTransform (not scale) to avoid cumulative multiplications.
       const dpr = window.devicePixelRatio || 1;
       if (canvas.width !== CANVAS_WIDTH * dpr || canvas.height !== CANVAS_HEIGHT * dpr) {
         canvas.width = CANVAS_WIDTH * dpr;
         canvas.height = CANVAS_HEIGHT * dpr;
-        ctx.scale(dpr, dpr);
       }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       if (!pausedRef.current) {
         // Tick logic
@@ -281,18 +280,27 @@ export default function GameCanvas({
     if (!multiplayerMode) return () => stopLoop();
   }, [multiplayerMode, stopLoop]);
 
-  // ── Prevent scroll on touch ──────────────────────────────────────────────
+  // ── Prevent scroll on touch + native flap handler ────────────────────────
+  // We use a native (non-passive) touchstart listener so that:
+  //   1. e.preventDefault() suppresses scroll/zoom on iOS/Android.
+  //   2. handleFlap fires reliably — React's synthetic onTouchStart can be
+  //      swallowed on iOS Safari when a passive:false native listener also
+  //      calls preventDefault() on the same element.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const prevent = (e: TouchEvent) => e.preventDefault();
-    canvas.addEventListener('touchstart', prevent, { passive: false });
-    canvas.addEventListener('touchmove', prevent, { passive: false });
-    return () => {
-      canvas.removeEventListener('touchstart', prevent);
-      canvas.removeEventListener('touchmove', prevent);
+    const onTouch = (e: TouchEvent) => {
+      e.preventDefault();
+      handleFlap();
     };
-  }, []);
+    const preventMove = (e: TouchEvent) => e.preventDefault();
+    canvas.addEventListener('touchstart', onTouch, { passive: false });
+    canvas.addEventListener('touchmove', preventMove, { passive: false });
+    return () => {
+      canvas.removeEventListener('touchstart', onTouch);
+      canvas.removeEventListener('touchmove', preventMove);
+    };
+  }, [handleFlap]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -310,7 +318,6 @@ export default function GameCanvas({
           boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
         }}
         onClick={handleFlap}
-        onTouchStart={handleFlap}
       />
 
       {/* MENU overlay */}

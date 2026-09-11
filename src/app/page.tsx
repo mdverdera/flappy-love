@@ -7,7 +7,7 @@ const MultiplayerShell = dynamic(() => import('@/components/MultiplayerShell'), 
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex items-center justify-center"
+    <main className="min-h-dvh flex items-center justify-center"
       style={{ background: 'linear-gradient(135deg, #1a0030 0%, #3d0026 50%, #1a0030 100%)' }}>
       <MultiplayerShell />
     </main>

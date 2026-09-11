@@ -4,10 +4,15 @@
   box-sizing: border-box;
 }
 
-body {
+html, body {
   margin: 0;
   padding: 0;
+  /* Lock scroll on both axes so iOS Safari can't drift the page after
+     the virtual keyboard closes (which was causing a blank/scrolled canvas). */
   overflow: hidden;
+  /* Use dynamic viewport height so the layout fills the real visible area
+     (below the address bar) on mobile browsers. */
+  height: 100dvh;
 }
 
 /* Prevent default tap highlight on mobile */
