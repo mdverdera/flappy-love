@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, MOTIVATIONAL_MESSAGES } from '@/game/constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_X, PLAYER_SIZE, MOTIVATIONAL_MESSAGES } from '@/game/constants';
 import { createInitialState, tick, MAX_LIVES } from '@/game/engine';
 import {
   drawBackground, drawObstacle, drawCollectible,
   drawParticles, drawPlayer, drawHUD, drawCountdown,
 } from '@/game/renderer';
 import type { GameSnapshot } from '@/game/types';
+import type { PlayerInfo } from '@/multiplayer/types';
 
 // ─── High-score persistence ────────────────────────────────────────────────
 
@@ -24,15 +25,44 @@ function setBestScore(score: number) {
 
 // ─── GameCanvas ────────────────────────────────────────────────────────────
 
-export default function GameCanvas() {
+// Optional multiplayer props — absent in solo mode
+export interface GameCanvasMultiplayerProps {
+  multiplayerMode?: boolean;
+  roundId?: string;
+  remotePlayers?: PlayerInfo[];
+  remoteStates?: Record<string, { y: number; vy: number; score: number }>;
+  onMultiplayerGameOver?: (score: number, lovePoints: number) => void;
+  onSendState?: (y: number, vy: number, score: number) => void;
+  /** Called when the player clicks "🌐 Multiplayer" from the solo menu */
+  onGoMultiplayer?: () => void;
+}
+
+// Throttle state broadcasts — send at most once per STATE_SEND_INTERVAL ms
+const STATE_SEND_INTERVAL = 100; // 10 Hz
+
+export default function GameCanvas({
+  multiplayerMode = false,
+  roundId,
+  remotePlayers = [],
+  remoteStates = {},
+  onMultiplayerGameOver,
+  onSendState,
+  onGoMultiplayer,
+}: GameCanvasMultiplayerProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<GameSnapshot>(createInitialState());
   const flapRef = useRef(false);
   const lastTimeRef = useRef<number>(0);
   const rafRef = useRef<number>(0);
   const lastObstacleSpawnRef = useRef<number>(0);
+  const lastStateSendRef = useRef<number>(0);
+  // Keep latest mp props accessible inside rAF loop without stale closures
+  const mpRef = useRef({ multiplayerMode, roundId, remoteStates, remotePlayers, onMultiplayerGameOver, onSendState });
+  useEffect(() => {
+    mpRef.current = { multiplayerMode, roundId, remoteStates, remotePlayers, onMultiplayerGameOver, onSendState };
+  });
 
-  const [screen, setScreen] = useState<'MENU' | 'COUNTDOWN' | 'PLAYING' | 'GAME_OVER'>('MENU');
+  const [screen, setScreen] = useState<'MENU' | 'COUNTDOWN' | 'PLAYING' | 'GAME_OVER'>(multiplayerMode ? 'PLAYING' : 'MENU');
   const countdownRef = useRef<number>(5); // counts 5→0 then launches
   const [finalScore, setFinalScore] = useState(0);
   const [finalLove, setFinalLove] = useState(0);
@@ -124,12 +154,36 @@ export default function GameCanvas() {
       s.obstacles.forEach(o => drawObstacle(ctx, o, s.time));
       s.collectibles.forEach(c => drawCollectible(ctx, c, s.time));
       drawParticles(ctx, s.particles);
+
+      // Draw remote player ghosts (multiplayer only) — before local player so local is on top
+      const { multiplayerMode: isMp, remotePlayers: rPlayers, remoteStates: rStates } = mpRef.current;
+      if (isMp && rPlayers && rStates) {
+        for (const rp of rPlayers) {
+          const rs = rStates[rp.id];
+          if (rs) {
+            drawRemoteGhost(ctx, rs.y, rp.color, rp.nickname);
+          }
+        }
+      }
+
       drawPlayer(ctx, s.player);
       drawHUD(ctx, s.score, s.lovePoints, s.hugotMeter, s.stage, s.maxHugotTriggered, s.maxHugotTimer, pausedRef.current, s.player.lives, MAX_LIVES);
+
+      // Throttled state broadcast (multiplayer)
+      if (isMp && mpRef.current.onSendState && now - lastStateSendRef.current > STATE_SEND_INTERVAL) {
+        lastStateSendRef.current = now;
+        mpRef.current.onSendState(s.player.y, s.player.vy, s.score);
+      }
 
       // Check game over
       if (s.gameState === 'GAME_OVER') {
         setBestScore(s.score);
+        if (isMp && mpRef.current.onMultiplayerGameOver) {
+          // In multiplayer: notify server, keep canvas visible (shell shows results)
+          mpRef.current.onMultiplayerGameOver(s.score, s.lovePoints);
+          cancelAnimationFrame(rafRef.current);
+          return;
+        }
         setFinalScore(s.score);
         setFinalLove(s.lovePoints);
         setFinalHugot(Math.round(s.hugotMeter));
@@ -166,6 +220,20 @@ export default function GameCanvas() {
     });
   }, [startCountdown, startLoop, stopLoop]);
 
+  // ── Multiplayer: auto-start loop when mounted in multiplayer mode ──────────
+  useEffect(() => {
+    if (multiplayerMode) {
+      stateRef.current = createInitialState();
+      flapRef.current = false;
+      lastObstacleSpawnRef.current = 0;
+      lastStateSendRef.current = 0;
+      // screen is already initialized to 'PLAYING' when multiplayerMode=true
+      startLoop();
+    }
+    return () => stopLoop();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [multiplayerMode]);
+
   // ── Input handling ──────────────────────────────────────────────────────
   const handleFlap = useCallback(() => {
     if (screen === 'MENU' || screen === 'COUNTDOWN' || screen === 'GAME_OVER') return;
@@ -195,10 +263,10 @@ export default function GameCanvas() {
     return () => window.removeEventListener('keydown', onKey);
   }, [handleFlap, togglePause]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount (solo mode — multiplayer cleanup is in the multiplayerMode effect)
   useEffect(() => {
-    return () => stopLoop();
-  }, [stopLoop]);
+    if (!multiplayerMode) return () => stopLoop();
+  }, [multiplayerMode, stopLoop]);
 
   // ── Prevent scroll on touch ──────────────────────────────────────────────
   useEffect(() => {
@@ -237,6 +305,7 @@ export default function GameCanvas() {
         <MenuOverlay
           bestScore={bestScore}
           onPlay={startGame}
+          onMultiplayer={onGoMultiplayer}
         />
       )}
 
@@ -271,48 +340,110 @@ export default function GameCanvas() {
 
 // ─── Menu Overlay ──────────────────────────────────────────────────────────
 
-function MenuOverlay({ bestScore, onPlay }: { bestScore: number; onPlay: () => void }) {
+function MenuOverlay({ bestScore, onPlay, onMultiplayer }: {
+  bestScore: number;
+  onPlay: () => void;
+  onMultiplayer?: () => void;
+}) {
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-between pb-10 pt-12 rounded-xl"
-      style={{ background: 'linear-gradient(180deg, rgba(20,0,40,0.82) 0%, rgba(80,0,40,0.75) 100%)' }}>
+    <div style={{
+      position: 'absolute',
+      inset: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 16,
+      padding: '24px 24px 20px',
+      boxSizing: 'border-box',
+      background: 'linear-gradient(180deg, rgba(20,0,40,0.88) 0%, rgba(80,0,40,0.82) 100%)',
+      borderRadius: 12,
+    }}>
       {/* Title */}
-      <div className="text-center">
-        <div className="text-5xl mb-1">💕</div>
-        <h1 className="text-4xl font-black text-white tracking-tight" style={{ textShadow: '0 2px 12px #ff4d6d' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 44, lineHeight: 1 }}>💕</div>
+        <h1 style={{
+          margin: '5px 0 3px',
+          fontSize: 34,
+          fontWeight: 900,
+          color: '#fff',
+          letterSpacing: '-1px',
+          textShadow: '0 2px 12px #ff4d6d',
+        }}>
           FLAPPY LOVE
         </h1>
-        <p className="text-pink-200 text-sm mt-2 font-medium">Keep flying. Collect hearts. Avoid the hugot.</p>
+        <p style={{ color: '#fbcfe8', fontSize: 13, margin: 0, fontWeight: 500 }}>
+          Keep flying. Collect hearts. Avoid the hugot.
+        </p>
         {bestScore > 0 && (
-          <p className="text-yellow-300 text-xs mt-1">🏆 Best: {bestScore}</p>
+          <p style={{ color: '#fde047', fontSize: 12, marginTop: 3, marginBottom: 0 }}>
+            🏆 Best: {bestScore}
+          </p>
         )}
       </div>
 
-      {/* How to play snippet */}
-      <div className="bg-white/10 rounded-xl px-6 py-4 text-center text-white text-sm leading-loose mx-4">
-        <p className="font-bold text-pink-300 mb-1">How to Play</p>
-        <p>🖱 Click &nbsp;|&nbsp; ⎵ Space &nbsp;|&nbsp; 👆 Tap</p>
-        <p className="text-pink-200">to flap upward</p>
-        <p className="mt-1 text-xs text-white/70">Collect ❤️ &nbsp; Avoid 💔 obstacles &nbsp; Survive!</p>
+      {/* How to play */}
+      <div style={{
+        background: 'rgba(255,255,255,0.08)',
+        borderRadius: 12,
+        padding: '11px 18px',
+        textAlign: 'center',
+        width: '100%',
+        maxWidth: 300,
+        boxSizing: 'border-box',
+      }}>
+        <p style={{ color: '#f9a8d4', fontWeight: 700, fontSize: 12, margin: '0 0 4px' }}>How to Play</p>
+        <p style={{ color: '#fff', fontSize: 13, margin: '0 0 1px' }}>
+          🖱 Click &nbsp;·&nbsp; ⎵ Space &nbsp;·&nbsp; 👆 Tap
+        </p>
+        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, margin: 0 }}>
+          Collect ❤️ &nbsp; Avoid 💔 obstacles &nbsp; Survive!
+        </p>
       </div>
 
       {/* Play button */}
       <button
-        className="px-12 py-4 rounded-full text-white text-xl font-black shadow-lg transition active:scale-95"
         style={{
           background: 'linear-gradient(135deg, #ff4d6d 0%, #c9184a 100%)',
           boxShadow: '0 4px 20px rgba(255,77,109,0.5)',
+          border: 'none',
+          borderRadius: 9999,
+          color: '#fff',
+          fontSize: 20,
+          fontWeight: 900,
+          padding: '13px 48px',
+          cursor: 'pointer',
         }}
         onClick={onPlay}
       >
         ❤️ PLAY
       </button>
 
+      {/* Multiplayer button (shown when accessed from multiplayer shell) */}
+      {onMultiplayer && (
+        <button
+          style={{
+            background: 'transparent',
+            border: '1.5px solid rgba(255,255,255,0.25)',
+            borderRadius: 9999,
+            color: 'rgba(255,255,255,0.6)',
+            fontSize: 13,
+            fontWeight: 600,
+            padding: '8px 28px',
+            cursor: 'pointer',
+          }}
+          onClick={onMultiplayer}
+        >
+          🌐 Multiplayer
+        </button>
+      )}
+
       {/* Credits */}
-      <div className="text-center px-4">
-        <p className="text-white/40 text-xs leading-relaxed">
+      <div style={{ textAlign: 'center' }}>
+        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, margin: '0 0 1px' }}>
           Made with 💕 for my unexpected friends in
         </p>
-        <p className="text-pink-300/70 text-xs font-semibold tracking-wide">
+        <p style={{ color: 'rgba(249,168,212,0.6)', fontSize: 11, fontWeight: 600, margin: 0 }}>
           Amulung, Cagayan 🌿
         </p>
       </div>
@@ -365,4 +496,53 @@ function GameOverOverlay({
       </div>
     </div>
   );
+}
+
+// ─── Remote ghost renderer (Canvas 2D, not React) ─────────────────────────
+// Draws other players as small semi-transparent hearts at the fixed X=80 column.
+
+function drawRemoteGhost(
+  ctx: CanvasRenderingContext2D,
+  y: number,
+  color: string,       // emoji color label e.g. '💙'
+  nickname: string,
+) {
+  ctx.save();
+  ctx.globalAlpha = 0.45;
+
+  // Draw a small heart
+  const s = PLAYER_SIZE * 0.7;
+  ctx.translate(PLAYER_X, y);
+
+  // Map emoji to a canvas fill color
+  const fillMap: Record<string, string> = {
+    '❤️': '#ff4d6d',
+    '💙': '#4361ee',
+    '💜': '#c77dff',
+    '💚': '#80ed99',
+    '🧡': '#fb8500',
+    '💛': '#ffd60a',
+  };
+  const fill = fillMap[color] ?? '#ffffff';
+
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  // Simple heart path scaled to s
+  const w = s * 0.9;
+  ctx.moveTo(0, -w * 0.15);
+  ctx.bezierCurveTo(0, -w * 0.6, -w * 0.7, -w * 0.6, -w * 0.7, -w * 0.1);
+  ctx.bezierCurveTo(-w * 0.7, w * 0.35, 0, w * 0.7, 0, w * 0.7);
+  ctx.bezierCurveTo(0, w * 0.7, w * 0.7, w * 0.35, w * 0.7, -w * 0.1);
+  ctx.bezierCurveTo(w * 0.7, -w * 0.6, 0, -w * 0.6, 0, -w * 0.15);
+  ctx.fill();
+
+  // Nickname label
+  ctx.globalAlpha = 0.6;
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${Math.round(s * 0.45)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(nickname.slice(0, 6), 0, s * 0.9);
+
+  ctx.restore();
 }

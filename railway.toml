@@ -1,0 +1,9 @@
+[build]
+builder = "nixpacks"
+buildCommand = "npm install"
+
+[deploy]
+startCommand = "npx tsx server/index.ts"
+healthcheckPath = "/"
+healthcheckTimeout = 30
+restartPolicyType = "always"
