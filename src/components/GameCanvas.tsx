@@ -62,6 +62,19 @@ export default function GameCanvas({
     mpRef.current = { multiplayerMode, roundId, remoteStates, remotePlayers, onMultiplayerGameOver, onSendState };
   });
 
+  // Pre-size the canvas immediately on mount so it's never 0×0 while the rAF loop is starting
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== CANVAS_WIDTH * dpr || canvas.height !== CANVAS_HEIGHT * dpr) {
+      canvas.width = CANVAS_WIDTH * dpr;
+      canvas.height = CANVAS_HEIGHT * dpr;
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.scale(dpr, dpr);
+    }
+  }, []);
+
   const [screen, setScreen] = useState<'MENU' | 'COUNTDOWN' | 'PLAYING' | 'GAME_OVER'>(multiplayerMode ? 'PLAYING' : 'MENU');
   const countdownRef = useRef<number>(5); // counts 5→0 then launches
   const [finalScore, setFinalScore] = useState(0);

@@ -1,17 +1,14 @@
 'use client';
 
 import React, { useEffect, useRef, useCallback, useState, useReducer } from 'react';
-import dynamic from 'next/dynamic';
 import { MultiplayerClient } from '@/multiplayer/client';
 import type { MultiplayerState, ServerMessage, PlayerInfo, RoundResult } from '@/multiplayer/types';
 import { INITIAL_MULTIPLAYER_STATE } from '@/multiplayer/types';
+import GameCanvas from './GameCanvas';
 import LobbyScreen from './LobbyScreen';
 import ResultsScreen from './ResultsScreen';
 import ConnectionBadge from './ConnectionBadge';
 import { CANVAS_WIDTH } from '@/game/constants';
-
-// GameCanvas is loaded dynamically (no SSR)
-const GameCanvas = dynamic(() => import('./GameCanvas'), { ssr: false });
 
 // ── Reducer ───────────────────────────────────────────────────────────────────
 
