@@ -35,6 +35,8 @@ export interface GameCanvasMultiplayerProps {
   onSendState?: (y: number, vy: number, score: number) => void;
   /** Called when the player clicks "🌐 Multiplayer" from the solo menu */
   onGoMultiplayer?: () => void;
+  /** Called when a dead spectating player chooses to leave early */
+  onLeaveEarly?: () => void;
 }
 
 // Throttle state broadcasts — send at most once per STATE_SEND_INTERVAL ms
@@ -48,6 +50,7 @@ export default function GameCanvas({
   onMultiplayerGameOver,
   onSendState,
   onGoMultiplayer,
+  onLeaveEarly,
 }: GameCanvasMultiplayerProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<GameSnapshot>(createInitialState());
@@ -56,6 +59,7 @@ export default function GameCanvas({
   const rafRef = useRef<number>(0);
   const lastObstacleSpawnRef = useRef<number>(0);
   const lastStateSendRef = useRef<number>(0);
+  const spectatingRef = useRef(false); // true once we've transitioned to SPECTATING
   // Keep latest mp props accessible inside rAF loop without stale closures
   const mpRef = useRef({ multiplayerMode, roundId, remoteStates, remotePlayers, onMultiplayerGameOver, onSendState });
   useEffect(() => {
@@ -73,7 +77,7 @@ export default function GameCanvas({
     if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }, []);
 
-  const [screen, setScreen] = useState<'MENU' | 'COUNTDOWN' | 'PLAYING' | 'GAME_OVER'>(multiplayerMode ? 'PLAYING' : 'MENU');
+  const [screen, setScreen] = useState<'MENU' | 'COUNTDOWN' | 'PLAYING' | 'GAME_OVER' | 'SPECTATING'>(multiplayerMode ? 'PLAYING' : 'MENU');
   const countdownRef = useRef<number>(5); // counts 5→0 then launches
   const [finalScore, setFinalScore] = useState(0);
   const [finalLove, setFinalLove] = useState(0);
@@ -146,6 +150,23 @@ export default function GameCanvas({
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+      const { multiplayerMode: isMp, remotePlayers: rPlayers, remoteStates: rStates } = mpRef.current;
+
+      if (spectatingRef.current) {
+        // ── Spectator render: background + remote ghosts only ─────────────────
+        const s = stateRef.current;
+        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        drawBackground(ctx, s.stage, s.bgPhase, s.time);
+        if (rPlayers && rStates) {
+          for (const rp of rPlayers) {
+            const rs = rStates[rp.id];
+            if (rs) drawRemoteGhost(ctx, rs.y, rp.color, rp.nickname);
+          }
+        }
+        rafRef.current = requestAnimationFrame(loop);
+        return;
+      }
+
       if (!pausedRef.current) {
         // Tick logic
         const flap = flapRef.current;
@@ -168,7 +189,6 @@ export default function GameCanvas({
       drawParticles(ctx, s.particles);
 
       // Draw remote player ghosts (multiplayer only) — before local player so local is on top
-      const { multiplayerMode: isMp, remotePlayers: rPlayers, remoteStates: rStates } = mpRef.current;
       if (isMp && rPlayers && rStates) {
         for (const rp of rPlayers) {
           const rs = rStates[rp.id];
@@ -191,19 +211,23 @@ export default function GameCanvas({
       if (s.gameState === 'GAME_OVER') {
         setBestScore(s.score);
         if (isMp && mpRef.current.onMultiplayerGameOver) {
-          // In multiplayer: notify server, keep canvas visible (shell shows results)
+          // Notify server once, then enter spectator mode (loop keeps running).
           mpRef.current.onMultiplayerGameOver(s.score, s.lovePoints);
+          setFinalScore(s.score);
+          setFinalLove(s.lovePoints);
+          spectatingRef.current = true;
+          setScreen('SPECTATING');
+          // rAF continues — fall through to schedule next frame
+        } else {
+          setFinalScore(s.score);
+          setFinalLove(s.lovePoints);
+          setFinalHugot(Math.round(s.hugotMeter));
+          setBestScoreState(getBestScore());
+          setMotivMsg(MOTIVATIONAL_MESSAGES[Math.floor(Math.random() * MOTIVATIONAL_MESSAGES.length)]);
+          setScreen('GAME_OVER');
           cancelAnimationFrame(rafRef.current);
           return;
         }
-        setFinalScore(s.score);
-        setFinalLove(s.lovePoints);
-        setFinalHugot(Math.round(s.hugotMeter));
-        setBestScoreState(getBestScore());
-        setMotivMsg(MOTIVATIONAL_MESSAGES[Math.floor(Math.random() * MOTIVATIONAL_MESSAGES.length)]);
-        setScreen('GAME_OVER');
-        cancelAnimationFrame(rafRef.current);
-        return;
       }
 
       rafRef.current = requestAnimationFrame(loop);
@@ -221,6 +245,7 @@ export default function GameCanvas({
     stateRef.current = createInitialState();
     flapRef.current = false;
     lastObstacleSpawnRef.current = 0;
+    spectatingRef.current = false;
     setPaused(false);
     pausedRef.current = false;
     setBestScoreState(getBestScore());
@@ -239,6 +264,7 @@ export default function GameCanvas({
       flapRef.current = false;
       lastObstacleSpawnRef.current = 0;
       lastStateSendRef.current = 0;
+      spectatingRef.current = false;
       // screen is already initialized to 'PLAYING' when multiplayerMode=true
       startLoop();
     }
@@ -339,6 +365,15 @@ export default function GameCanvas({
           message={motivMsg}
           onPlayAgain={startGame}
           onMenu={() => setScreen('MENU')}
+        />
+      )}
+
+      {/* SPECTATING overlay — shown after dying in multiplayer while others still play */}
+      {screen === 'SPECTATING' && (
+        <SpectatorOverlay
+          score={finalScore}
+          love={finalLove}
+          onLeave={onLeaveEarly}
         />
       )}
 
@@ -530,6 +565,35 @@ function GameOverOverlay({
           ← Back to Menu
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── Spectator Overlay ─────────────────────────────────────────────────────
+
+function SpectatorOverlay({
+  score, love, onLeave,
+}: {
+  score: number; love: number;
+  onLeave?: () => void;
+}) {
+  return (
+    <div
+      className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 rounded-b-xl px-4 py-3"
+      style={{ background: 'rgba(10,0,20,0.82)', borderTop: '1px solid rgba(255,77,109,0.25)' }}
+    >
+      <p className="text-pink-300 font-bold text-sm" style={{ textShadow: '0 0 10px rgba(255,77,109,0.6)' }}>
+        💔 You&rsquo;re out &mdash; watching the survivors&hellip;
+      </p>
+      <p className="text-white/60 text-xs">🏆 {score.toLocaleString()} &nbsp;·&nbsp; ❤️ {love} love</p>
+      {onLeave && (
+        <button
+          className="mt-1 px-5 py-1.5 rounded-full text-white/70 font-semibold text-xs border border-white/20 hover:bg-white/10 transition active:scale-95"
+          onClick={onLeave}
+        >
+          Leave Room
+        </button>
+      )}
     </div>
   );
 }

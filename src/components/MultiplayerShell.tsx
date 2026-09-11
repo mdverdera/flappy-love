@@ -322,6 +322,7 @@ export default function MultiplayerShell() {
           remotePlayers={mp.players.filter(p => p.id !== mp.playerId)}
           remoteStates={mp.remoteStates}
           onMultiplayerGameOver={handleGameOver}
+          onLeaveEarly={handleLeaveRoom}
           onSendState={(y, vy, score) => {
             if (mp.roundId) {
               clientRef.current?.send({ type: 'PLAYER_STATE', y, vy, score, roundId: mp.roundId });
