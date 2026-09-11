@@ -335,14 +335,30 @@ export default function GameCanvas({
         />
       )}
 
-      {/* Pause button (only during play) */}
-      {screen === 'PLAYING' && (
+      {/* Pause button (solo only — no pausing in multiplayer) */}
+      {screen === 'PLAYING' && !multiplayerMode && (
         <button
-          className="absolute top-2 right-2 z-10 text-white bg-black/30 rounded-full w-9 h-9 flex items-center justify-center text-lg leading-none hover:bg-black/50 transition"
+          aria-label={paused ? 'Resume' : 'Pause'}
           onClick={togglePause}
           onTouchStart={e => { e.preventDefault(); togglePause(); }}
-          aria-label="Pause"
-          style={{ touchAction: 'none' }}
+          style={{
+            position: 'absolute',
+            bottom: 16,
+            right: 16,
+            zIndex: 10,
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            background: 'rgba(0,0,0,0.35)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            color: '#fff',
+            fontSize: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            touchAction: 'none',
+          }}
         >
           {paused ? '▶' : '⏸'}
         </button>
