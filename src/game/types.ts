@@ -94,4 +94,5 @@ export interface GameSnapshot {
   time: number;         // elapsed ms
   maxHugotTriggered: boolean;
   maxHugotTimer: number;
+  nextId: number;       // per-instance ID counter — avoids shared module-level state
 }

@@ -14,9 +14,6 @@ import {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-let _nextId = 1;
-function nextId() { return _nextId++; }
-
 function rand(min: number, max: number) {
   return min + Math.random() * (max - min);
 }
@@ -42,7 +39,7 @@ function pickObstacleType(stage: number): ObstacleType {
   return available[Math.floor(Math.random() * available.length)];
 }
 
-function spawnObstacle(stage: number, now: number): Obstacle {
+function spawnObstacle(stage: number, now: number, id: number): Obstacle {
   const gapH = Math.max(BASE_GAP_HEIGHT - stage * 10, 100);
   const margin = 80;
   const gapY = rand(margin + gapH / 2, CANVAS_HEIGHT - 60 - margin - gapH / 2);
@@ -54,7 +51,7 @@ function spawnObstacle(stage: number, now: number): Obstacle {
   const moveFreq = oscillating.includes(type) ? rand(0.8, 1.8) : 0;
 
   return {
-    id: nextId(),
+    id,
     type,
     x: CANVAS_WIDTH + OBSTACLE_WIDTH / 2,
     gapY,
@@ -82,7 +79,7 @@ function pickCollectibleType(): CollectibleType {
   return 'SMALL_HEART';
 }
 
-function spawnCollectible(gapY: number, gapH: number): Collectible {
+function spawnCollectible(gapY: number, gapH: number, id: number): Collectible {
   // Keep the collectible inside the gap with a small margin so it's never inside a pillar
   const margin = COLLECTIBLE_RADIUS + 8;
   const minY = gapY - gapH / 2 + margin;
@@ -90,7 +87,7 @@ function spawnCollectible(gapY: number, gapH: number): Collectible {
   // If the gap is too tight to fit safely, just place it at the center
   const y = maxY > minY ? rand(minY, maxY) : gapY;
   return {
-    id: nextId(),
+    id,
     type: pickCollectibleType(),
     x: CANVAS_WIDTH + 60,
     y,
@@ -203,6 +200,7 @@ export function createInitialState(): GameSnapshot {
     time: 0,
     maxHugotTriggered: false,
     maxHugotTimer: 0,
+    nextId: 1,
   };
 }
 
@@ -227,6 +225,7 @@ export function tick(state: GameSnapshot, input: TickInput): GameSnapshot {
     bgPhase, time,
   } = state;
   const { score, lovePoints, hugotMeter, maxHugotTriggered, maxHugotTimer } = state;
+  let nextId = state.nextId;
 
   // Clone mutable arrays
   obstacles = [...obstacles];
@@ -304,13 +303,13 @@ export function tick(state: GameSnapshot, input: TickInput): GameSnapshot {
   // Spawn
   const spawnInterval = Math.max(OBSTACLE_SPAWN_INTERVAL - stage * 100, 900);
   if (time - input.lastObstacleSpawn > spawnInterval) {
-    const newObs = spawnObstacle(stage, time);
+    const newObs = spawnObstacle(stage, time, nextId++);
     obstacles.push(newObs);
     input.setLastObstacleSpawn(time);
 
     // Spawn collectible inside the gap of this obstacle
     if (Math.random() < 0.55) {
-      collectibles.push(spawnCollectible(newObs.gapY, newObs.gapH));
+      collectibles.push(spawnCollectible(newObs.gapY, newObs.gapH, nextId++));
     }
   }
 
@@ -446,6 +445,7 @@ export function tick(state: GameSnapshot, input: TickInput): GameSnapshot {
     time,
     maxHugotTriggered: newMaxHugot,
     maxHugotTimer: newMaxHugotTimer,
+    nextId,
   };
 }
 
