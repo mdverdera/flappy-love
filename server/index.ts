@@ -5,8 +5,8 @@
 //             health-check (GET /) works and PORT env var is respected.
 
 import { createServer, IncomingMessage, ServerResponse } from 'http';
+import { randomUUID } from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
-import { v4 as uuidv4 } from 'uuid';
 import type { ClientMessage } from './types';
 import {
   setSendFn,
@@ -47,7 +47,7 @@ setSendFn((playerId: string, msg: object) => {
 });
 
 wss.on('connection', (ws: WebSocket) => {
-  const playerId = uuidv4();
+  const playerId = randomUUID();
   sockets.set(playerId, ws);
   socketIds.set(ws, playerId);
   createPlayer(playerId);
