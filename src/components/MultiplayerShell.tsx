@@ -378,9 +378,9 @@ export default function MultiplayerShell() {
         </div>
       )}
 
-      {/* Connection badge (visible during play) */}
+      {/* Connection badge (visible during play) — bottom-right to avoid HUD score overlap */}
       {(mp.screen === 'PLAYING') && (
-        <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 20 }}>
+        <div style={{ position: 'absolute', bottom: 8, right: 8, zIndex: 20 }}>
           <ConnectionBadge connected={mp.connected} />
         </div>
       )}

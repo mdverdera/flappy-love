@@ -15,6 +15,15 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Flappy Love 💕",
   description: "Keep flying. Collect hearts. Avoid the hugot.",
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+    // Resize the visual viewport (not the layout viewport) when the
+    // on-screen keyboard appears — keeps the game canvas stationary.
+    interactiveWidget: 'resizes-visual',
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
