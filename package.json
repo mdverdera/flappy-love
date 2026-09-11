@@ -2,6 +2,9 @@
   "name": "flappy-love",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=18.19.0"
+  },
   "scripts": {
     "dev": "next dev",
     "dev:server": "tsx watch server/index.ts",
@@ -14,7 +17,6 @@
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "uuid": "^14.0.2",
     "ws": "^8.21.3"
   },
   "devDependencies": {
@@ -22,7 +24,6 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
