@@ -63,6 +63,8 @@ export default function GameCanvas({
   const lastObstacleSpawnRef = useRef<number>(0);
   const lastStateSendRef = useRef<number>(0);
   const spectatingRef = useRef(false); // true once we've transitioned to SPECTATING
+  const frozenRef = useRef(frozen);
+  useEffect(() => { frozenRef.current = frozen; }, [frozen]);
   // Keep latest mp props accessible inside rAF loop without stale closures
   const mpRef = useRef({ multiplayerMode, roundId, remoteStates, remotePlayers, onMultiplayerGameOver, onSendState });
   useEffect(() => {
@@ -170,7 +172,26 @@ export default function GameCanvas({
         return;
       }
 
-      if (!pausedRef.current) {
+      if (frozenRef.current) {
+        // ── Frozen (pre-game countdown): hover the bird in place, no physics/collision
+        const s = stateRef.current;
+        const newTime = s.time + dt;
+        const hoverY = CANVAS_HEIGHT / 2 + Math.sin(now * 0.002) * 12;
+        // Keep lastObstacleSpawn in sync with time so no pipe spawns the instant
+        // the countdown ends (spawn logic fires when time - lastSpawn > interval).
+        lastObstacleSpawnRef.current = newTime;
+        stateRef.current = {
+          ...s,
+          time: newTime,
+          player: {
+            ...s.player,
+            y: hoverY,
+            vy: 0,
+            rotation: 0,
+            wingPhase: s.player.wingPhase + (dt / 16.67) * 3,
+          },
+        };
+      } else if (!pausedRef.current) {
         // Tick logic
         const flap = flapRef.current;
         flapRef.current = false; // consume flap
