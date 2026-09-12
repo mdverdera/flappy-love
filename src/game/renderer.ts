@@ -1255,6 +1255,7 @@ export function drawHUD(
   paused: boolean,
   lives: number,
   maxLives: number,
+  roundRemainingSec?: number | null,
 ) {
   // Semi-transparent top bar
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -1288,6 +1289,15 @@ export function drawHUD(
   ctx.font = '10px system-ui, sans-serif';
   ctx.textAlign = 'left';
   ctx.fillText(`❤️ ${lovePoints} love`, 12, 42);
+
+  // Multiplayer Match Timer (bottom-right of HUD)
+  if (roundRemainingSec !== undefined && roundRemainingSec !== null) {
+    const isUrgent = roundRemainingSec <= 10;
+    ctx.fillStyle = isUrgent ? '#ff4d6d' : 'rgba(255,255,255,0.85)';
+    ctx.font = isUrgent ? 'bold 11px system-ui, sans-serif' : '10px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`⏱️ ${Math.max(0, roundRemainingSec)}s`, CANVAS_WIDTH - 12, 42);
+  }
 
   // MAX HUGOT banner
   if (maxHugotTriggered) {
