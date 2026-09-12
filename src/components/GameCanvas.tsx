@@ -37,6 +37,8 @@ export interface GameCanvasMultiplayerProps {
   onGoMultiplayer?: () => void;
   /** Called when a dead spectating player chooses to leave early */
   onLeaveEarly?: () => void;
+  /** When true, input is suppressed (used during pre-game countdown) */
+  frozen?: boolean;
 }
 
 // Throttle state broadcasts — send at most once per STATE_SEND_INTERVAL ms
@@ -51,6 +53,7 @@ export default function GameCanvas({
   onSendState,
   onGoMultiplayer,
   onLeaveEarly,
+  frozen = false,
 }: GameCanvasMultiplayerProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<GameSnapshot>(createInitialState());
@@ -274,13 +277,14 @@ export default function GameCanvas({
 
   // ── Input handling ──────────────────────────────────────────────────────
   const handleFlap = useCallback(() => {
+    if (frozen) return;
     if (screen === 'MENU' || screen === 'COUNTDOWN' || screen === 'GAME_OVER') return;
     if (pausedRef.current) {
       setPaused(false);
       return;
     }
     flapRef.current = true;
-  }, [screen]);
+  }, [frozen, screen]);
 
   const togglePause = useCallback(() => {
     if (screen !== 'PLAYING') return;
