@@ -23,6 +23,9 @@ export const COLLECTIBLE_RADIUS = 14;
 // Stages (score thresholds)
 export const STAGE_THRESHOLDS = [0, 300, 700, 1300, 2200, 3500];
 
+// Multiplayer match settings
+export const MULTIPLAYER_ROUND_DURATION_SEC = 60;
+
 // Colors
 export const COLORS = {
   heartRed: '#ff4d6d',

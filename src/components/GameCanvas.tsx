@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_X, PLAYER_SIZE, MOTIVATIONAL_MESSAGES } from '@/game/constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, PLAYER_X, PLAYER_SIZE, MOTIVATIONAL_MESSAGES, MULTIPLAYER_ROUND_DURATION_SEC } from '@/game/constants';
 import { createInitialState, tick, MAX_LIVES } from '@/game/engine';
 import {
   drawBackground, drawObstacle, drawCollectible,
@@ -29,6 +29,7 @@ function setBestScore(score: number) {
 export interface GameCanvasMultiplayerProps {
   multiplayerMode?: boolean;
   roundId?: string;
+  roundStartTime?: number | null;
   remotePlayers?: PlayerInfo[];
   remoteStates?: Record<string, { y: number; vy: number; score: number }>;
   onMultiplayerGameOver?: (score: number, lovePoints: number) => void;
@@ -47,6 +48,7 @@ const STATE_SEND_INTERVAL = 100; // 10 Hz
 export default function GameCanvas({
   multiplayerMode = false,
   roundId,
+  roundStartTime,
   remotePlayers = [],
   remoteStates = {},
   onMultiplayerGameOver,
@@ -66,9 +68,9 @@ export default function GameCanvas({
   const frozenRef = useRef(frozen);
   useEffect(() => { frozenRef.current = frozen; }, [frozen]);
   // Keep latest mp props accessible inside rAF loop without stale closures
-  const mpRef = useRef({ multiplayerMode, roundId, remoteStates, remotePlayers, onMultiplayerGameOver, onSendState });
+  const mpRef = useRef({ multiplayerMode, roundId, roundStartTime, remoteStates, remotePlayers, onMultiplayerGameOver, onSendState });
   useEffect(() => {
-    mpRef.current = { multiplayerMode, roundId, remoteStates, remotePlayers, onMultiplayerGameOver, onSendState };
+    mpRef.current = { multiplayerMode, roundId, roundStartTime, remoteStates, remotePlayers, onMultiplayerGameOver, onSendState };
   });
 
   // Pre-size the canvas immediately on mount so it's never 0×0 while the rAF loop is starting
@@ -223,7 +225,26 @@ export default function GameCanvas({
       }
 
       drawPlayer(ctx, s.player);
-      drawHUD(ctx, s.score, s.lovePoints, s.hugotMeter, s.stage, s.maxHugotTriggered, s.maxHugotTimer, pausedRef.current, s.player.lives, MAX_LIVES);
+      let roundRemainingSec: number | null = null;
+      if (isMp && mpRef.current.roundStartTime) {
+        const elapsed = (Date.now() - mpRef.current.roundStartTime) / 1000;
+        roundRemainingSec = Math.max(0, Math.ceil(MULTIPLAYER_ROUND_DURATION_SEC - elapsed));
+      } else if (isMp) {
+        roundRemainingSec = MULTIPLAYER_ROUND_DURATION_SEC;
+      }
+      drawHUD(
+        ctx,
+        s.score,
+        s.lovePoints,
+        s.hugotMeter,
+        s.stage,
+        s.maxHugotTriggered,
+        s.maxHugotTimer,
+        pausedRef.current,
+        s.player.lives,
+        MAX_LIVES,
+        roundRemainingSec,
+      );
 
       // Throttled state broadcast (multiplayer)
       if (isMp && mpRef.current.onSendState && now - lastStateSendRef.current > STATE_SEND_INTERVAL) {

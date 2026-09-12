@@ -315,6 +315,7 @@ export default function MultiplayerShell() {
           multiplayerMode
           frozen={mp.screen === 'COUNTDOWN'}
           roundId={mp.roundId ?? undefined}
+          roundStartTime={mp.roundStartTime}
           remotePlayers={mp.players.filter(p => p.id !== mp.playerId)}
           remoteStates={mp.remoteStates}
           onMultiplayerGameOver={handleGameOver}
