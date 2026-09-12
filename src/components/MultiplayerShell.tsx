@@ -309,15 +309,11 @@ export default function MultiplayerShell() {
   // Multiplayer mode: show lobby / countdown overlay / game / results on top of canvas
   return (
     <div className="relative select-none" style={{ width: CANVAS_WIDTH, maxWidth: '100%' }}>
-      {/* Countdown overlay — shown before game canvas mounts */}
-      {mp.screen === 'COUNTDOWN' && (
-        <CountdownPlaceholder value={mp.countdownValue} />
-      )}
-
-      {/* Game canvas — only mounted when actually playing (avoids gravity during countdown) */}
-      {mp.screen === 'PLAYING' && (
+      {/* Game canvas — mounted during both countdown and playing so the bird is already flying */}
+      {(mp.screen === 'COUNTDOWN' || mp.screen === 'PLAYING') && (
         <GameCanvas
           multiplayerMode
+          frozen={mp.screen === 'COUNTDOWN'}
           roundId={mp.roundId ?? undefined}
           remotePlayers={mp.players.filter(p => p.id !== mp.playerId)}
           remoteStates={mp.remoteStates}
@@ -329,6 +325,11 @@ export default function MultiplayerShell() {
             }
           }}
         />
+      )}
+
+      {/* Countdown overlay — rendered on top of the live game canvas */}
+      {mp.screen === 'COUNTDOWN' && (
+        <CountdownOverlay value={mp.countdownValue} />
       )}
 
       {/* Lobby / menu screens */}
@@ -389,53 +390,44 @@ export default function MultiplayerShell() {
   );
 }
 
-// ── Countdown placeholder ─────────────────────────────────────────────────────
-// A standalone full-canvas-sized div shown INSTEAD of the game canvas during
-// the server countdown. No game loop runs — no gravity, no player falling.
+// ── Countdown overlay ─────────────────────────────────────────────────────────
+// Rendered on top of the live GameCanvas so players see the bird flying while
+// the countdown runs. Uses position:absolute to sit over the canvas.
 
-function CountdownPlaceholder({ value }: { value: number | null }) {
+function CountdownOverlay({ value }: { value: number | null }) {
   const label = value === null ? '' : value <= 0 ? '❤️ FLY!' : String(value);
 
   return (
     <div
       style={{
-        width: '100%',
-        height: 0,
-        paddingBottom: `${(640 / 480) * 100}%`,
-        position: 'relative',
-        background: 'linear-gradient(180deg, #1a0030 0%, #3d0026 60%, #1a0030 100%)',
+        position: 'absolute',
+        inset: 0,
+        zIndex: 10,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 16,
+        background: 'rgba(0,0,0,0.45)',
         borderRadius: 12,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-        overflow: 'hidden',
+        pointerEvents: 'none',
       }}
     >
       <div
+        key={label}
+        className="text-white font-black text-center"
         style={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 16,
+          fontSize: value !== null && value <= 0 ? 64 : 120,
+          lineHeight: 1,
+          textShadow: '0 0 40px rgba(255,77,109,0.9)',
+          animation: 'countPop 0.35s ease-out',
         }}
       >
-        <div
-          key={label}
-          className="text-white font-black text-center"
-          style={{
-            fontSize: value !== null && value <= 0 ? 64 : 120,
-            lineHeight: 1,
-            textShadow: '0 0 40px rgba(255,77,109,0.9)',
-            animation: 'countPop 0.35s ease-out',
-          }}
-        >
-          {label}
-        </div>
-        <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 15, margin: 0 }}>
-          {value !== null && value <= 0 ? 'Tap / Click / Space to flap!' : 'Get ready…'}
-        </p>
+        {label}
       </div>
+      <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 15, margin: 0 }}>
+        {value !== null && value <= 0 ? 'Tap / Click / Space to flap!' : 'Get ready…'}
+      </p>
       <style>{`
         @keyframes countPop {
           from { transform: scale(1.5); opacity: 0.3; }
